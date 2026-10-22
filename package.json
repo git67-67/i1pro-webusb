@@ -1,0 +1,15 @@
+{
+  "name": "i1pro-webusb",
+  "version": "0.1.0",
+  "description": "WebUSB driver for the X-Rite / Gretag-Macbeth i1 Pro (Rev A-D) spectrometer, ported from ArgyllCMS, with a hardware-free simulator",
+  "main": "src/i1pro-core.js",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "test": "node tests/core.test.js && node tests/advanced.test.js && node tests/reliability.test.js",
+    "test:ui": "python3 tests/ui_demo.py index.html",
+    "build:site": "python3 examples/spectrum-workbench/build.py site-src/spectrum-workbench.html index.html",
+    "build:standalone": "python3 examples/standalone/build.py standalone.html"
+  },
+  "files": ["src", "data", "docs", "udev"],
+  "keywords": ["i1pro", "spectrometer", "webusb", "argyllcms", "spectrum", "colorimetry"]
+}

@@ -1,0 +1,2 @@
+# i1 Pro (Gretag-Macbeth / X-Rite) - allow the logged-in user (and therefore the browser) to open the instrument.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0971", ATTR{idProduct}=="2000", MODE="0660", TAG+="uaccess"

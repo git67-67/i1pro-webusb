@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>i1 Pro WebUSB — minimal example</title>
+<style>
+ :root{color-scheme:light dark;--accent:#0b7d8a}
+ body{font:15px/1.45 system-ui,sans-serif;max-width:720px;margin:0 auto;padding:16px}
+ button{font:inherit;padding:6px 12px;margin:0 6px 6px 0}
+ #status{min-height:1.5em;margin:8px 0}.err{color:#c0392b}
+ canvas{width:100%;height:240px;border:1px solid #8884;border-radius:6px}
+ table{border-collapse:collapse}td{padding:2px 12px 2px 0}
+</style></head>
+<body>
+<h1>i1 Pro WebUSB — minimal example</h1>
+<p>Chrome or Edge only (WebUSB). Close ArgyllCMS/spotread first. No hardware? Use the demo.</p>
+<p><button id="connect">Connect i1 Pro</button><button id="demo">Demo (no hardware)</button>
+ <button id="dark" disabled>1 · Dark calibration (cover sensor)</button><button id="measure" disabled>2 · Measure light</button>
+ <button id="csv" disabled>Download CSV</button></p>
+<div id="status" role="status"></div>
+<canvas id="cv"></canvas>
+<table id="info"></table>
+
+<script src="../../src/i1pro-core.js"></script>
+<script src="../../src/i1pro-sim.js"></script>
+<script src="../../data/demo-eeprom.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let dev = null, sim = null, spec = null;
+const say = (m, err) => { $('status').textContent = m; $('status').className = err ? 'err' : ''; };
+
+async function attach(transport) {
+  try {
+    dev = new I1Pro.I1ProDevice(transport);
+    const info = await dev.init();                       // reset, EEPROM, power mode, clocks
+    say('Ready: S/N ' + info.serial + ', firmware ' + info.firmware + '. Cover the sensor and press 1.');
+    $('dark').disabled = false;
+  } catch (e) { say(e.message, true); }
+}
+$('connect').onclick = async () => { try { await attach(await I1Pro.WebUSBTransport.request()); } catch (e) { say(e.message, true); } };
+$('demo').onclick = () => { sim = new I1ProSim.SimTransport({ eepromB64: window.I1P_DEMO_EEPROM, level: 20000, speed: 0.15 }); attach(sim); };
+
+$('dark').onclick = async () => {
+  say('Dark calibration…'); if (sim) sim.covered = true;
+  try { await dev.calibrateDark(); say('Dark calibration done. Point at the light and press 2.'); $('measure').disabled = false; }
+  catch (e) { say(e.message, true); }
+  if (sim) sim.covered = false;
+};
+
+$('measure').onclick = async () => {
+  say('Measuring…');
+  try {
+    const r = await dev.measure({ readTime: 1.0 });          // auto exposure, 1 s of averaging
+    const rs = dev.resampler({ lo: 380, hi: 730, step: 1, kernel: 'factory' });  // any grid / kernel
+    spec = { wl: Array.from(rs.wl), v: Array.from(rs.apply(r.avgAbs)) };          // mW/m²/nm on a 1 nm grid
+    say('Done: ' + (r.inttime * 1000).toFixed(1) + ' ms × ' + r.nFrames + ' frames, peak ' + Math.round(r.peakCounts) + ' counts.');
+    $('info').innerHTML = '<tr><td>Integration</td><td>' + (r.inttime * 1000).toFixed(2) + ' ms</td></tr><tr><td>Frames</td><td>' + r.nFrames + '</td></tr>';
+    $('csv').disabled = false; draw();
+  } catch (e) { say(e.message, true); }
+};
+
+$('csv').onclick = () => {
+  const a = document.createElement('a'); a.download = 'i1pro-spectrum.csv';
+  a.href = URL.createObjectURL(new Blob([I1Pro.toCSV(spec.wl, spec.v, { device: 'i1 Pro S/N ' + dev.cal.serial })], { type: 'text/csv' })); a.click();
+};
+
+function draw() {
+  const cv = $('cv'), w = cv.clientWidth, h = cv.clientHeight, d = devicePixelRatio || 1; cv.width = w * d; cv.height = h * d;
+  const c = cv.getContext('2d'); c.scale(d, d); const mx = Math.max(...spec.v) || 1;
+  c.strokeStyle = '#0b7d8a'; c.lineWidth = 2; c.beginPath();
+  spec.wl.forEach((x, i) => { const px = 30 + (x - 380) / 350 * (w - 40), py = h - 20 - spec.v[i] / mx * (h - 30); i ? c.lineTo(px, py) : c.moveTo(px, py); }); c.stroke();
+  c.fillStyle = '#888'; c.font = '11px system-ui'; for (let nm = 400; nm <= 700; nm += 100) c.fillText(nm + ' nm', 30 + (nm - 380) / 350 * (w - 40) - 14, h - 5);
+}
+</script></body></html>

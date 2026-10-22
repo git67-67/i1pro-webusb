@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>i1 Pro WebUSB Console</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6f8;--panel:#fff;--fg:#1b2127;--muted:#5d6975;--line:#d6dde3;--accent:#0b7d8a;--warn:#b25b00;--err:#c0392b;--grid:#e3e8ec;--k1:#2a78d6;--k2:#e8643a;--k3:#1a9e6b;--k4:#a05bd0;--k5:#c9941a;--k6:#d63a7a;--k7:#4d5a66}
+@media (prefers-color-scheme:dark){:root{--bg:#12171c;--panel:#1b2229;--fg:#e6ebef;--muted:#9aa7b2;--line:#2e3943;--accent:#3fb6c4;--warn:#e0953b;--err:#ef6f60;--grid:#28323b;--k1:#5ba3ff;--k2:#ff8a63;--k3:#45c995;--k4:#c590ee;--k5:#e6b84a;--k6:#f06aa0;--k7:#a7b4c0}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 2px}h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 12px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px}@media (max-width:960px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:14px}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer}button:hover:not(:disabled){border-color:var(--accent)}button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.sm{padding:3px 9px;font-size:12.5px}
+input,select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 7px;max-width:100%}
+input[type=number]{width:90px}
+label{display:block;color:var(--muted);font-size:12.5px}label.chk{display:flex;gap:6px;align-items:center;color:var(--fg);font-size:13.5px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.fg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}
+.fg label input,.fg label select{display:block;margin-top:2px;width:100%}
+#status{min-height:1.4em;margin:8px 0 0}.ok{color:var(--accent)}.err{color:var(--err)}.warn{color:var(--warn)}
+details.d{border-top:1px solid var(--line);padding:8px 0}details.d>summary{cursor:pointer;font-weight:600}
+.note{color:var(--muted);font-size:12.5px;margin:6px 0}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;border:1px solid var(--line);font-size:11.5px;color:var(--muted)}.chip.ok{color:var(--accent);border-color:var(--accent)}.chip.warn{color:var(--warn);border-color:var(--warn)}
+.bar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+canvas{width:100%;display:block}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:600;font-size:11.5px}
+tr.rw{cursor:pointer}tr.sel{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.kvs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 12px;margin:8px 0}.kvs span{display:block;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}.kvs b{font-family:ui-monospace,monospace;font-weight:600}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+</style></head>
+<body><div class="wrap">
+<h1>i1 Pro WebUSB Console</h1>
+<p class="sub">Driver, calibration and measurement in one page. Chrome or Edge (WebUSB). Close ArgyllCMS/spotread first; plug the i1 Pro straight into a USB port. Nothing leaves your browser.</p>
+
+<div class="card">
+  <div class="row"><button class="primary" id="connect">Connect i1 Pro</button><button id="demo">Demo (no hardware)</button><button id="disc" disabled>Disconnect</button><span id="who" class="note"></span></div>
+  <div id="status" role="status"></div>
+</div>
+
+<div class="grid"><div>
+  <div class="card"><h2 id="ptitle">Spectrum</h2>
+    <div class="row" style="justify-content:space-between"><label class="chk"><input type="checkbox" id="norm"> Normalise</label><label class="chk"><input type="checkbox" id="log"> Log axis</label>
+      <span class="note">Hover to read · drag to zoom · double-click resets · Shift+drag pans</span></div>
+    <canvas id="cv" height="280"></canvas><div id="legend" class="note"></div>
+  </div>
+  <div class="card"><h2>Selected measurement</h2><div id="detail" class="note">Nothing measured yet.</div>
+    <div class="row" id="acts" hidden><button class="sm" data-a="csv">CSV</button><button class="sm" data-a="sp">.sp</button><button class="sm" data-a="argyll">Argyll values CSV</button><button class="sm" data-a="px">Pixels CSV</button><button class="sm" data-a="re">Re-process at current settings</button></div>
+  </div>
+  <div class="card" id="tcard" hidden><h2>Live recording over time</h2><div class="row"><label>Show <select id="ta"></select></label><label>and <select id="tb"></select></label><button class="sm" id="tcsv">CSV</button><button class="sm" id="tclr">Clear</button></div><canvas id="cvT" height="180"></canvas></div>
+  <div class="card"><h2>Pixels of the selected measurement (128 sensor values, counts/s)</h2><canvas id="cvP" height="120"></canvas></div>
+</div>
+
+<div>
+  <div class="card"><h2>1 · Calibrate</h2>
+    <div class="row"><button id="dark" disabled>Dark calibration</button><span class="chip" id="darkchip">not done</span></div>
+    <div class="note">Cover the sensor (cap on, or lay the instrument on a dark surface).</div>
+    <div class="row" style="margin-top:6px"><label class="chk"><input type="radio" name="mode" value="em" checked> Light (emission)</label><label class="chk"><input type="radio" name="mode" value="rf"> Surface (reflective)</label></div>
+    <div id="whiterow" hidden class="row" style="margin-top:6px"><button id="white" disabled>White tile calibration</button><span class="chip" id="whitechip">not done</span></div>
+    <div class="bar"><label class="chk"><input type="checkbox" id="ron" disabled> Source (blackbody) correction</label><span class="chip" id="rchip">none</span></div>
+    <div class="bar"><label class="chk"><input type="checkbox" id="aon" disabled> Absolute level calibration</label><span class="chip" id="achip">none</span></div>
+  </div>
+
+  <div class="card"><h2>2 · Measure</h2>
+    <div class="row"><button class="primary" id="meas" disabled>Measure</button><button id="live" disabled>▶ Live</button><button id="stop" hidden>Stop</button></div>
+    <div class="fg"><label>Name<input type="text" id="name" placeholder="automatic"></label><label>Readings to average (0 = until Stop)<input type="number" id="n" value="1" min="0" step="1"></label></div>
+    <details class="d" open><summary>Exposure</summary>
+      <div class="fg"><label>Mode<select id="exm"><option value="auto">Auto (aim for target)</option><option value="manual">Manual</option></select></label>
+        <label>Averaging time per reading (s)<input type="number" id="rt" value="1" min="0.05" step="0.05"></label>
+        <label id="tgt-f">Target peak (counts)<input type="number" id="tgt" value="40500" min="2000" max="54000" step="500"></label>
+        <label id="max-f">Longest auto time (s)<input type="number" id="maxauto" value="2" min="0.05" max="4.4" step="0.1"></label>
+        <label id="mt-f" hidden>Integration time (ms)<input type="number" id="mt" value="50" min="4.7" max="4400" step="1"></label>
+        <label>Pause between readings (s)<input type="number" id="int" value="0" min="0" step="0.1"></label></div>
+      <label class="chk"><input type="checkbox" id="reuse" checked> Reuse the exposure for repeat readings</label>
+      <label class="chk" id="rflamp-f" hidden>Lamp warm-up (ms) <input type="number" id="lamp" value="250" min="50" max="1000" step="25"></label>
+    </details>
+    <details class="d"><summary>Output resolution</summary>
+      <div class="fg"><label>Resolution<select id="res"></select></label></div>
+      <div id="custom" hidden><div class="fg"><label>From (nm)<input type="number" id="lo" value="380"></label><label>To (nm)<input type="number" id="hi" value="730"></label><label>Step (nm)<input type="number" id="step" value="1" min="0.1" step="0.1"></label>
+        <label>Kernel<select id="kern"><option value="argyll">ArgyllCMS (cubic + triangle)</option><option value="factory">Factory (asymmetric Hann sinc)</option><option value="sinc">Windowed sinc</option><option value="triangle">Triangle</option><option value="gaussian">Gaussian</option></select></label>
+        <label id="ws-f">Width ×<input type="number" id="ws" value="1" min="0.3" max="2" step="0.05"></label><label id="fw-f" hidden>Width / FWHM nm (0 = default)<input type="number" id="fw" value="0" min="0" step="0.5"></label>
+        <label>Interpolation between bands<select id="interp"><option value="lagrange">Cubic</option><option value="linear">Linear</option></select></label></div></div>
+      <div class="note" id="resnote"></div>
+      <div class="note"><b>The original ArgyllCMS values are always stored</b> with each measurement (36 bands and the 3.33 nm grid) next to the 128 raw pixels, whatever you display.</div>
+    </details>
+    <details class="d"><summary>Live recording</summary>
+      <div class="fg"><label>Update every (s, 0 = as fast as possible)<input type="number" id="lrt" value="0" min="0" step="0.1"></label>
+        <label>Averaging<select id="am"><option value="none">None</option><option value="rolling">Rolling average</option></select></label>
+        <label id="wn-f" hidden>Window (readings)<input type="number" id="wn" value="5" min="2" max="100"></label><label>Keep history (points)<input type="number" id="keep" value="600" min="20"></label></div>
+      <div class="row"><button class="sm" id="livesnap" disabled>Add current live spectrum to the list</button></div>
+    </details>
+  </div>
+
+  <div class="card"><h2>3 · Calibrations and tools</h2>
+    <details class="d"><summary>Source correction: calibrate against a known blackbody</summary>
+      <p class="note">Measure a lamp of known colour temperature (tungsten halogen). A per-band multiplier makes the instrument show that shape; it applies to later light measurements while the switch above is on.</p>
+      <div class="fg"><label>Reference<select id="rk"><option value="blackbody">Ideal blackbody</option><option value="tungsten">Tungsten filament (approximate)</option><option value="custom">Custom CSV (wavelength,value)</option></select></label><label>Temperature (K)<input type="number" id="rT" value="2856" min="1500" max="10000" step="10"></label></div>
+      <div class="row"><input type="file" id="rfile" accept=".csv,.txt" hidden><button class="sm" id="rload" hidden>Load reference CSV…</button><button class="sm" id="rcal" disabled>Measure and calibrate</button><button class="sm" id="rclr" disabled>Clear</button><button class="sm" id="rsave" disabled>Save profile</button><button class="sm" id="rload2">Load profile</button><input type="file" id="rpf" accept=".json" hidden></div>
+      <canvas id="cvC" height="70"></canvas><div class="note" id="rinfo"></div>
+    </details>
+    <details class="d"><summary>Absolute level (brightness / power)</summary>
+      <p class="note">The factory scale is assumed to be mW/m²/nm and is unchecked. One factor scales every later light measurement. Use the same exposure settings and geometry as for the real measurements.</p>
+      <div class="fg"><label>Reference<select id="ak"><option value="lum">Known brightness (cd/m²)</option><option value="irr">Known radiant power per area (mW/m²)</option><option value="laser">Laser line of known power</option><option value="man">Enter the factor</option></select></label>
+        <label id="av-f"><span>Known value (cd/m²)</span><input type="number" id="av" value="100" min="0" step="any"></label>
+        <label id="ap-f" hidden>Laser power (mW)<input type="number" id="ap" value="1" min="0" step="any"></label><label id="aw-f" hidden>Laser wavelength (nm, 0 = strongest)<input type="number" id="aw" value="0" min="0" max="800"></label>
+        <label id="ah-f" hidden>Integrate ± nm<input type="number" id="ah" value="15" min="3" max="100"></label><label id="aa-f" hidden>Beam area on sensor (mm², blank = unknown)<input type="number" id="aa" value="" min="0" step="any"></label>
+        <label id="am2-f" hidden>Factor<input type="number" id="am2" value="1" min="0" step="any"></label></div>
+      <div class="note" id="anote"></div>
+      <div class="row"><button class="sm" id="acal" disabled>Measure and calibrate</button><button class="sm" id="aclr" disabled>Clear</button></div><div class="note" id="ainfo"></div>
+    </details>
+    <details class="d"><summary>Blackbody at several temperatures (find the true temperature)</summary>
+      <p class="note">Vary the lamp's temperature and add each step (3 or more). Steps are determined from the data alone; the absolute value needs the true temperature of one step (pyrometer, filament resistance). Without it the factory colour calibration and a grey emitter are trusted.</p>
+      <div class="row"><label>Your estimate (K, optional)<input type="number" id="bt" value="" min="1000" max="10000"></label><button class="sm" id="badd" disabled>Add this temperature</button><button class="sm" id="bclr" disabled>Clear</button></div>
+      <table id="btab"><thead><tr><th>#</th><th>Estimate</th><th>Peak</th><th>Fitted T</th><th>Anchor</th></tr></thead><tbody></tbody></table>
+      <div class="fg"><label>True temperature of the selected step (K, blank = none)<input type="number" id="ban" value="" min="1000" max="10000"></label><label>Selected step<select id="bas"></select></label><label>Fit from (nm)<input type="number" id="blo" value="430" min="380" max="700"></label><label>to (nm)<input type="number" id="bhi" value="710" min="420" max="730"></label></div>
+      <div class="row"><button class="sm" id="bfit" disabled>Fit temperatures</button><button class="sm" id="buse" disabled>Use as source correction</button></div><div class="note" id="binfo"></div>
+    </details>
+    <details class="d"><summary>Calibration data (EEPROM)</summary>
+      <p class="note">The factory calibration is read from the instrument when you connect. Back it up, or load another (.bin, hex dump, or the “-D9” output of spotread).</p>
+      <div class="row"><button class="sm" id="eebin" disabled>Backup .bin</button><button class="sm" id="eehex" disabled>Backup hex</button><button class="sm" id="eeload" disabled>Import…</button><input type="file" id="eefile" hidden><button class="sm" id="eereset" disabled>Back to the instrument's own</button></div><div class="note" id="eeinfo"></div>
+    </details>
+    <details class="d"><summary>Instrument info and diagnostics</summary>
+      <div class="note" id="info">Not connected.</div>
+      <label class="chk"><input type="checkbox" id="autorec" checked> Reset and retry once after a timeout</label>
+      <div class="row"><button class="sm" id="diag" disabled>Copy diagnostic log</button><button class="sm" id="diagsave" disabled>Save log</button></div><div class="note" id="diagmsg"></div>
+    </details>
+    <details class="d"><summary>Linux setup</summary>
+      <p class="note">Install <code>udev/55-i1pro.rules</code> (<code>sudo cp 55-i1pro.rules /etc/udev/rules.d/ &amp;&amp; sudo udevadm control --reload &amp;&amp; sudo udevadm trigger</code>) and re-plug. Windows needs the WinUSB driver (Zadig).</p>
+    </details>
+  </div>
+
+  <div class="card"><h2>Measurements</h2>
+    <table id="mtab"><thead><tr><th></th><th>Name</th><th>Y</th><th>CCT</th><th>Peak</th></tr></thead><tbody></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="sm" id="mexp" disabled>Export all (JSON)</button><button class="sm" id="mload">Load JSON…</button><input type="file" id="mfile" accept=".json" hidden><button class="sm" id="mdel" disabled>Delete selected</button><button class="sm" id="mclr" disabled>Clear all</button></div>
+  </div>
+</div></div>
+</div>
+
+<!--SCRIPTS-->
+<script>
+'use strict';
+(function () {
+const g = id => document.getElementById(id), I = window.I1Pro, { Plot, fmtN } = window.I1ProPlot;
+const num = (id, d) => { const v = parseFloat(g(id).value); return isFinite(v) ? v : d; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ls = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
+let dev = null, sim = null, busy = false, liveOn = false, stopFlag = false, mode = 'em', seq = 0, origEE = null, srcMeta = null, userRef = null, hist = [], live = null;
+const M = { list: [], sel: null };
+const COLS = i => getComputedStyle(document.documentElement).getPropertyValue('--k' + (1 + i % 7)).trim() || '#2a78d6';
+function status(m, c) { const s = g('status'); s.textContent = m; s.className = c || ''; }
+function download(name, data, type) { const a = document.createElement('a'); a.download = name; a.href = URL.createObjectURL(new Blob([data], { type: type || 'text/plain' })); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function explain(e) {
+  const m = (e && e.message) || String(e);
+  if (/Access denied|SecurityError|claimInterface|Unable to claim/i.test(m)) return 'The system refused access to the USB device. Add the udev rule (Linux), re-plug, and close spotread.';
+  if (/No device selected/i.test(m)) return 'No device was chosen.';
+  if (e && (e.code === 'TIMEOUT' || e.code === 'RECOVER')) return m + ' Use “Copy diagnostic log” under Instrument info.';
+  return m;
+}
+const BUSY = ['dark', 'white', 'meas', 'live', 'connect', 'demo', 'rcal', 'acal', 'badd', 'eeload', 'eereset'];
+function setBusy(b) { busy = b; for (const id of BUSY) { const e = g(id); if (!e) continue; if (b) e.disabled = true; } if (!b) refresh(); }
+function refresh() {
+  const c = !!dev; g('connect').disabled = c; g('demo').disabled = c; g('disc').disabled = !c;
+  g('dark').disabled = !c; g('white').disabled = !c || mode !== 'rf'; g('meas').disabled = !c || !(mode === 'rf' ? dev && dev.refl : dev && dev.dark) ; g('live').disabled = !c || mode !== 'em' || !(dev && dev.dark);
+  g('rcal').disabled = !c || !(dev && dev.dark); g('acal').disabled = !c || !(dev && dev.dark); g('badd').disabled = !c || !(dev && dev.dark);
+  for (const id of ['eebin', 'eehex', 'diag', 'diagsave']) g(id).disabled = !c; g('eeload').disabled = !c; eeButtons(); calUi();
+}
+
+/* ---------- connection ---------- */
+async function attach(t, demo) {
+  try {
+    setBusy(true); status('Connecting…'); dev = new I.I1ProDevice(t); dev.autoRecover = g('autorec').checked; const info = await dev.init(); origEE = Uint8Array.from(dev.eeprom);
+    g('who').textContent = 'S/N ' + info.serial + ' · firmware ' + info.firmware + (demo ? ' · DEMO' : ''); status('Ready. Cover the sensor and press “Dark calibration”.', 'ok');
+    g('info').textContent = 'Serial ' + info.serial + ', firmware ' + info.firmware + ', integration time ' + (info.minInt * 1000).toFixed(2) + ' ms – ' + info.maxInt.toFixed(1) + ' s, saturation ' + info.sat0 + ', target ' + info.sensTarget + '.';
+    loadProfile(); loadAbs(); dev.onButton && dev.onButton(() => { if (!busy && !liveOn && !g('meas').disabled) g('meas').click(); });
+  } catch (e) { dev = null; status(explain(e), 'err'); }
+  setBusy(false); eeInfo();
+}
+g('connect').onclick = async () => { try { sim = null; await attach(await I.WebUSBTransport.request(), false); } catch (e) { status(explain(e), 'err'); } };
+g('demo').onclick = async () => { sim = new I1ProSim.SimTransport({ eepromB64: window.I1P_DEMO_EEPROM, level: 20000, speed: 0.15 }); await attach(sim, true); };
+g('disc').onclick = async () => { try { await dev.close(); } catch (e) { } dev = null; sim = null; g('who').textContent = ''; status('Disconnected.'); refresh(); };
+g('autorec').onchange = () => { if (dev) dev.autoRecover = g('autorec').checked; };
+
+/* ---------- mode, resolution ---------- */
+for (const r of document.querySelectorAll('input[name=mode]')) r.onchange = () => { mode = r.value; g('whiterow').hidden = mode !== 'rf'; g('rflamp-f').hidden = mode !== 'rf'; render(); refresh(); };
+const PRE = I.RES_PRESETS; g('res').innerHTML = PRE.map(p => '<option value="' + p.id + '">' + esc(p.label) + '</option>').join('');
+function preset() {
+  const p = PRE.find(x => x.id === g('res').value) || PRE[0];
+  if (p.id !== 'custom') return p;
+  return { id: 'custom', label: 'custom grid', opts: { lo: num('lo', 380), hi: num('hi', 730), step: Math.max(0.1, num('step', 1)), kernel: g('kern').value, widthScale: num('ws', 1), fwhm: num('fw', 0), interp: g('interp').value } };
+}
+function resUi() {
+  const p = preset(); g('custom').hidden = p.id !== 'custom'; const k = g('kern').value; g('ws-f').hidden = k !== 'factory'; g('fw-f').hidden = k === 'factory';
+  g('resnote').textContent = (Math.round((p.opts.hi - p.opts.lo) / p.opts.step) + 1) + ' points per spectrum. ' + (p.id === 'std10' ? 'Exactly the 36 bands ArgyllCMS reports.' : p.id === 'hires3' ? 'ArgyllCMS high-resolution grid with its filter algorithm. Optical resolution is about 6.5 nm; narrow peaks sharpen, noise grows.' : 'Finer than the pixel spacing (3.1–3.6 nm) is interpolation, not extra information.');
+}
+for (const id of ['res', 'lo', 'hi', 'step', 'kern', 'ws', 'fw', 'interp']) g(id).onchange = () => resUi(); g('res').value = 'std10'; resUi();
+g('exm').onchange = () => { const m = g('exm').value === 'manual'; g('mt-f').hidden = !m; g('tgt-f').hidden = m; g('max-f').hidden = m; g('reuse').parentElement.hidden = m; };
+g('am').onchange = () => { g('wn-f').hidden = g('am').value !== 'rolling'; };
+function mopts(extra) {
+  const man = g('exm').value === 'manual';
+  return Object.assign({ readTime: num('rt', 1), reuse: g('reuse').checked, targoscale: Math.min(0.98, Math.max(0.05, num('tgt', 40500) / dev.cal.sensTarget)), maxAutoTime: num('maxauto', 2), manualTime: man ? num('mt', 50) / 1000 : 0, progress: m => status('Measuring: ' + m) }, extra);
+}
+
+/* ---------- colour numbers (Wyman et al. 2013 analytic CIE 1931 fit, about 1 % of the tables) ---------- */
+const gl = (x, m, a, b) => Math.exp(-0.5 * ((x - m) / (x < m ? a : b)) ** 2);
+const xbar = l => 1.056 * gl(l, 599.8, 37.9, 31.0) + 0.362 * gl(l, 442.0, 16.0, 26.7) - 0.065 * gl(l, 501.1, 20.4, 26.2);
+const ybar = l => 0.821 * gl(l, 568.8, 46.9, 40.5) + 0.286 * gl(l, 530.9, 16.3, 31.1);
+const zbar = l => 1.217 * gl(l, 437.0, 11.8, 36.0) + 0.681 * gl(l, 459.0, 26.0, 13.8);
+function findPeaks(wl, v, maxN, promPct) {
+  const n = v.length, mx = Math.max(...v); if (!(mx > 0)) return [];
+  const s = v.map((x, i) => (v[Math.max(0, i - 1)] + 2 * x + v[Math.min(n - 1, i + 1)]) / 4), cand = [];
+  for (let i = 1; i < n - 1; i++) if (s[i] > s[i - 1] && s[i] >= s[i + 1]) {
+    let l = i, mL = s[i]; while (l > 0 && s[l - 1] <= s[i]) { l--; mL = Math.min(mL, s[l]); } let r = i, mR = s[i]; while (r < n - 1 && s[r + 1] <= s[i]) { r++; mR = Math.min(mR, s[r]); }
+    const prom = s[i] - (l === 0 && r === n - 1 ? 0 : l === 0 ? mR : r === n - 1 ? mL : Math.max(mL, mR)); if (prom >= promPct / 100 * mx && s[i] > 0.02 * mx) cand.push({ i, prom, h: s[i] });
+  }
+  cand.sort((a, b) => b.prom - a.prom); const out = [];
+  for (const c of cand) { if (out.length >= maxN) break; if (out.some(o => Math.abs(wl[o.i] - wl[c.i]) < 8)) continue;
+    const i = c.i, y0 = s[i - 1], y1 = s[i], y2 = s[i + 1], den = y0 - 2 * y1 + y2, d = den ? 0.5 * (y0 - y2) / den : 0, nm = wl[i] + Math.max(-1, Math.min(1, d)) * (wl[1] - wl[0]);
+    out.push({ nm: +nm.toFixed(2), h: v[i], rel: v[i] / mx }); }
+  return out.sort((a, b) => a.nm - b.nm);
+}
+function emMetrics(wl, v, unitPower) {
+  let X = 0, Y = 0, Z = 0, P = 0; const dl = wl.length > 1 ? wl[1] - wl[0] : 1;
+  for (let i = 0; i < wl.length; i++) { const l = wl[i], s = Math.max(0, v[i]) * dl; X += xbar(l) * s; Y += ybar(l) * s; Z += zbar(l) * s; P += s; }
+  const sum = X + Y + Z, x = X / sum, y = Y / sum, n = (x - 0.3320) / (0.1858 - y), cct = 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.33;
+  return { Y: 0.683 * Y, rad: P, x, y, cct: isFinite(cct) && cct > 1000 && cct < 25000 ? cct : null, peaks: findPeaks(wl, v.map(a => Math.max(0, a)), 6, 8) };
+}
+const unitsOf = m => m && m.absMeta && m.absMeta.unit === 'power' ? { spec: 'mW/nm', Y: 'lm', rad: 'mW' } : { spec: 'mW/m²/nm', Y: 'cd/m²', rad: 'mW/m²' };
+
+/* ---------- plots ---------- */
+const sp = new Plot(g('cv'), { h: 280, fmtX: x => x.toFixed(1), unitX: ' nm', title: () => g('ptitle').textContent }); sp.dom = [380, 780];
+const px = new Plot(g('cvP'), { h: 120, fmtX: x => 'pixel ' + Math.round(x), fmtTick: x => String(Math.round(x)), title: 'pixels (blue end = 127)' }); px.dom = [-1, 128];
+const tp = new Plot(g('cvT'), { h: 180, fmtX: x => x.toFixed(1), unitX: ' s', from0: false });
+g('log').onchange = () => { sp.log = g('log').checked; sp.draw(); }; g('norm').onchange = () => render();
+function spectrum(m) { return m.spec; }
+function render() {
+  const kind = mode === 'rf' ? 'rf' : 'em', list = M.list.filter(m => m.kind === kind), series = []; let wMin = 1e9, wMax = 0; const norm = g('norm').checked && kind === 'em';
+  list.forEach(m => { const s = spectrum(m); let y = s.v.slice(); if (norm) { const mx = Math.max(...y) || 1; y = y.map(a => a / mx); } const sel = m.id === M.sel;
+    series.push({ x: s.wl, y, color: COLS(m.ci), width: sel ? 2.6 : 1.4, name: m.name, unit: norm ? '' : (kind === 'rf' ? '' : unitsOf(m).spec), fill: sel && list.length < 3 }); wMin = Math.min(wMin, s.wl[0]); wMax = Math.max(wMax, s.wl[s.wl.length - 1]); });
+  if (liveOn && live && kind === 'em') { let y = live.spec.v.slice(); if (norm) { const mx = Math.max(...y) || 1; y = y.map(a => a / mx); } series.push({ x: live.spec.wl, y, color: 'var(--fg)', width: 2.2, dash: [6, 3], name: 'live', unit: '' }); }
+  const sel = M.list.find(m => m.id === M.sel && m.kind === kind), mk = sel && sel.metrics && sel.metrics.peaks ? sel.metrics.peaks.map(p => { const s = sel.spec; let i = 0; while (i < s.wl.length - 2 && s.wl[i + 1] < p.nm) i++; const t = (p.nm - s.wl[i]) / (s.wl[i + 1] - s.wl[i] || 1); let y = s.v[i] + (s.v[i + 1] - s.v[i]) * t; if (norm) y /= Math.max(...s.v) || 1; return { x: p.nm, y: Math.max(0, y), text: p.nm.toFixed(1) + ' nm' }; }) : [];
+  g('ptitle').textContent = (kind === 'em' ? (norm ? 'Relative power' : 'Spectrum · ' + unitsOf(sel).spec) : 'Reflectance (1 = 100 %)'); g('legend').innerHTML = list.map(m => '<span style="margin-right:12px"><i class="dot" style="background:' + COLS(m.ci) + '"></i>' + esc(m.name) + '</span>').join('');
+  sp.dom = list.length ? [Math.min(wMin, 400), Math.max(wMax, 700)] : [380, 780]; sp.set(series, mk); detail(); table();
+  const sm = sel; px.set(sm ? [{ x: Array.from(sm.avgAbs, (_, i) => i), y: Array.from(sm.avgAbs), color: COLS(sm.ci), width: 1.4, name: 'pixels', nopts: false }] : [], []);
+}
+function detail() {
+  const m = M.list.find(x => x.id === M.sel); g('acts').hidden = !m; if (!m) { g('detail').textContent = 'Nothing measured yet.'; return; }
+  const t = m.metrics, u = unitsOf(m), kv = (k, v) => '<div><span>' + k + '</span><b>' + v + '</b></div>';
+  const chips = (m.corr ? '<span class="chip ok">source correction: ' + esc((m.corrMeta && m.corrMeta.kind) || 'applied') + '</span> ' : '<span class="chip">no source correction</span> ') + (m.absK ? '<span class="chip ok">absolute × ' + fmtN(m.absK) + '</span> ' : '<span class="chip">factory level</span> ');
+  g('detail').innerHTML = '<b>' + esc(m.name) + '</b> ' + chips + '<div class="note">' + (m.inttime * 1000).toFixed(1) + ' ms × ' + m.nFrames + ' frames · ' + m.exposure + ' · peak ' + Math.round(m.peak) + ' counts (' + Math.round(m.headroom * 100) + ' % of saturation)' + (m.nReadings > 1 ? ' · mean of ' + m.nReadings : '') + ' · ' + esc(m.resLabel) + '</div>' +
+    (m.kind === 'em' && t ? '<div class="kvs">' + kv('Brightness', fmtN(t.Y) + ' ' + u.Y) + kv('Radiant power', fmtN(t.rad) + ' ' + u.rad) + kv('x, y', t.x.toFixed(4) + ', ' + t.y.toFixed(4)) + kv('CCT (McCamy)', t.cct ? Math.round(t.cct) + ' K' : '–') + kv('Peaks', t.peaks.slice().sort((a, b) => b.h - a.h).slice(0, 4).map(p => p.nm.toFixed(1)).join(', ') + ' nm') + '</div>' : '') +
+    (m.warn && m.warn.length ? '<div class="note warn">' + esc(m.warn.join(' · ')) + '</div>' : '');
+}
+function table() {
+  g('mtab').querySelector('tbody').innerHTML = M.list.map(m => '<tr class="rw ' + (m.id === M.sel ? 'sel' : '') + '" data-id="' + m.id + '"><td><i class="dot" style="background:' + COLS(m.ci) + '"></i></td><td>' + esc(m.name) + (m.kind === 'rf' ? ' <span class="chip">surface</span>' : '') + '</td><td>' + (m.metrics && m.kind === 'em' ? fmtN(m.metrics.Y) : '–') + '</td><td>' + (m.metrics && m.metrics.cct ? Math.round(m.metrics.cct) + ' K' : '–') + '</td><td>' + (m.metrics && m.metrics.peaks && m.metrics.peaks.length ? m.metrics.peaks.slice().sort((a, b) => b.h - a.h)[0].nm.toFixed(0) + ' nm' : '–') + '</td></tr>').join('');
+  for (const id of ['mexp', 'mdel', 'mclr']) g(id).disabled = !M.list.length;
+}
+g('mtab').onclick = e => { const r = e.target.closest('tr.rw'); if (!r) return; M.sel = r.dataset.id; const m = M.list.find(x => x.id === M.sel); if (m && (m.kind === 'rf') !== (mode === 'rf')) { const rb = document.querySelector('input[name=mode][value=' + m.kind + ']'); rb.checked = true; rb.onchange(); } else render(); };
+g('mdel').onclick = () => { M.list = M.list.filter(m => m.id !== M.sel); M.sel = M.list.length ? M.list[M.list.length - 1].id : null; save(); render(); };
+g('mclr').onclick = () => { if (confirm('Delete all measurements?')) { M.list = []; M.sel = null; save(); render(); } };
+
+/* ---------- storing measurements ---------- */
+const sig = (a, d) => Array.from(a, x => +x.toPrecision(d || 7));
+function gridOf(r) {
+  const P = preset();
+  if (r.kind === 'reflective') { const x = I.reflectanceFromAbs(dev.cal, dev.fits, r.avgAbs, r.whiteAbs, P.opts); return { wl: Array.from(x.wl), v: Array.from(x.v) }; }
+  const rs = dev.resampler(P.opts); return { wl: Array.from(rs.wl), v: Array.from(rs.apply(r.avgAbs)) };
+}
+function make(r, name, warn) {
+  const rf = r.kind === 'reflective', P = preset(), spec = gridOf(r);
+  const m = { id: 'm' + Date.now().toString(36) + (++seq), name, kind: rf ? 'rf' : 'em', t: r.when || Date.now(), serial: dev.cal.serial, inttime: r.inttime, nFrames: r.nFrames, nReadings: r.nSamples || 1, exposure: r.exposureMode || 'auto', peak: r.peakCounts, headroom: r.headroom, avgAbs: sig(r.avgAbs), whiteAbs: rf ? sig(r.whiteAbs) : null,
+    spec: { wl: spec.wl, v: sig(spec.v, 6) }, resLabel: P.label, warn: warn || [], ci: seq - 1, corr: null, corrMeta: null, absK: null, absMeta: null };
+  if (!rf) { if (r.corrApplied && dev.userCorr) { m.corr = sig(dev.userCorr.c, 6); m.corrMeta = Object.assign({}, dev.userCorr.meta); } if (r.absApplied && dev.absCal) { m.absK = r.absK; m.absMeta = Object.assign({}, dev.absCal.meta); }
+    const a = I.argyllValues(dev.cal, dev.fits, Float64Array.from(r.avgAbs)); m.argyll = { std36: sig(a.std36), hires: { lo: a.hires.lo, hi: a.hires.hi, step: a.hires.step, v: sig(a.hires.v, 6) } };
+    const f = dev.resampler({ lo: 380, hi: 780, step: 1, kernel: 'factory' }); m.metrics = emMetrics(Array.from(f.wl), Array.from(f.apply(r.avgAbs))); }
+  else { const hr = I.RES_PRESETS[1].opts, h = I.reflectanceFromAbs(dev.cal, dev.fits, Float64Array.from(r.avgAbs), Float64Array.from(r.whiteAbs), hr); m.argyll = { std36: sig(r.s36), hires: { lo: hr.lo, hi: hr.hi, step: hr.step, v: sig(h.v, 6) } }; m.metrics = null; }
+  return m;
+}
+function add(m) { M.list.push(m); M.sel = m.id; save(); render(); }
+function save() { try { ls.set('i1c-meas', JSON.stringify(M.list.slice(-60))); } catch (e) { } }
+try { M.list = JSON.parse(ls.get('i1c-meas') || '[]'); seq = M.list.length; M.sel = M.list.length ? M.list[M.list.length - 1].id : null; } catch (e) { M.list = []; }
+const nextName = kind => { const b = kind === 'rf' ? 'Surface' : 'Light'; let mx = 0; for (const m of M.list) { const r = new RegExp('^' + b + ' (\\d+)$').exec(m.name); if (r) mx = Math.max(mx, +r[1]); } return b + ' ' + (mx + 1); };
+const uniq = n => { let k = 2, x = n; while (M.list.some(m => m.name === x)) x = n + ' ' + k++; return x; };
+
+/* ---------- measuring ---------- */
+async function doDark() {
+  if (!dev || busy) return; setBusy(true);
+  try { if (sim) sim.covered = true; status('Dark calibration… keep the sensor covered.'); await dev.calibrateDark({ progress: m => status('Dark calibration: ' + m) }); status('Dark calibration done. Point at the light and press Measure.', 'ok'); }
+  catch (e) { status(explain(e), 'err'); } if (sim) sim.covered = false; setBusy(false);
+}
+g('dark').onclick = doDark;
+g('white').onclick = async () => {
+  if (!dev || busy) return; setBusy(true);
+  try { if (sim) { sim.mode = 'reflective'; sim.target = 'white'; } status('Place the instrument on the white tile…'); await dev.calibrateWhite({ lampTime: num('lamp', 250) / 1000, progress: m => status('White calibration: ' + m) }); status('White tile calibrated. Measure your surface.', 'ok'); }
+  catch (e) { status(explain(e), 'err'); } if (sim) sim.mode = 'emission'; setBusy(false);
+};
+async function oneMeasure() {
+  const n = Math.floor(num('n', 1)), man = g('exm').value === 'manual';
+  if (mode === 'rf') { if (sim) { sim.mode = 'reflective'; sim.target = 'sample'; } return await dev.measureReflective({ readTime: Math.max(0.01, Math.min(num('rt', 1), 0.5)), lampTime: num('lamp', 250) / 1000, progress: m => status('Measuring: ' + m) }); }
+  if (sim) sim.mode = 'emission';
+  if (n === 1) return await dev.measure(mopts());
+  return await dev.measureSeries(mopts({ count: n, intervalSec: num('int', 0), shouldStop: () => stopFlag, onSample: (r, i) => status('Reading ' + (i + 1) + (n ? ' of ' + n : '') + '…') }));
+}
+g('meas').onclick = async () => {
+  if (!dev || busy) return; setBusy(true); stopFlag = false; g('stop').hidden = false;
+  try { const r = await oneMeasure(), w = []; if (r.inconsistent) w.push('light changed during the reading'); if (r.headroom > 0.97) w.push('very close to saturation');
+    const m = make(r, uniq(g('name').value.trim() || nextName(mode)), w); add(m); g('name').value = ''; status('Done: ' + (m.metrics && m.metrics.cct ? Math.round(m.metrics.cct) + ' K, ' : '') + (m.metrics ? fmtN(m.metrics.Y) + ' ' + unitsOf(m).Y : 'reflectance added') + '.', 'ok'); }
+  catch (e) { status(explain(e), 'err'); } if (sim) sim.mode = 'emission'; g('stop').hidden = true; setBusy(false);
+};
+g('stop').onclick = () => { stopFlag = true; };
+/* live */
+g('live').onclick = async () => {
+  if (liveOn) { stopFlag = true; return; }
+  if (!dev || busy || mode !== 'em') return; setBusy(true); liveOn = true; stopFlag = false; hist = []; g('live').disabled = false; g('live').textContent = '■ Stop live'; g('tcard').hidden = false; g('livesnap').disabled = false;
+  const win = []; const t0 = Date.now(); let first = true;
+  try {
+    while (!stopFlag) {
+      if (sim) sim.mode = 'emission'; const r = await dev.measure(mopts({ reuse: !first, readTime: Math.min(num('rt', 1), 0.5) })); first = false;
+      win.push(r); const K = g('am').value === 'rolling' ? Math.max(2, Math.floor(num('wn', 5))) : 1; while (win.length > K) win.shift();
+      const avg = win.length > 1 ? I.averageResults(win) : r, f = dev.resampler(preset().opts), sg = { wl: Array.from(f.wl), v: Array.from(f.apply(avg.avgAbs)) }, f1 = dev.resampler({ lo: 380, hi: 780, step: 1, kernel: 'factory' });
+      live = { r: avg, spec: sg, m: emMetrics(Array.from(f1.wl), Array.from(f1.apply(avg.avgAbs))) }; hist.push({ t: (Date.now() - t0) / 1000, m: live.m }); while (hist.length > num('keep', 600)) hist.shift();
+      status('Live: ' + (live.m.cct ? Math.round(live.m.cct) + ' K, ' : '') + fmtN(live.m.Y) + ' ' + unitsOf({ absMeta: dev.absCal && dev.absCal.enabled ? dev.absCal.meta : null }).Y + (K > 1 ? ' · mean of ' + win.length : ''), 'ok'); render(); drawT();
+      const w = num('lrt', 0); if (w > 0) await new Promise(res => setTimeout(res, w * 1000));
+    }
+  } catch (e) { status(explain(e), 'err'); }
+  liveOn = false; g('live').textContent = '▶ Live'; g('livesnap').disabled = !live; setBusy(false); render();
+};
+g('livesnap').onclick = () => { if (!live) return; const m = make(live.r, uniq(nextName('em')), []); add(m); status('Live spectrum added to the list.', 'ok'); };
+const TM = [['Y', 'Brightness'], ['rad', 'Radiant power'], ['cct', 'CCT (K)'], ['x', 'CIE x'], ['y', 'CIE y']];
+for (const id of ['ta', 'tb']) g(id).innerHTML = (id === 'tb' ? '<option value="">(none)</option>' : '') + TM.map(t => '<option value="' + t[0] + '">' + t[1] + '</option>').join(''); g('ta').value = 'Y'; g('tb').value = 'cct';
+function drawT() { const s = []; for (const [id, i] of [['ta', 0], ['tb', 1]]) { const k = g(id).value; if (!k) continue; s.push({ x: hist.map(h => h.t), y: hist.map(h => h.m[k] == null ? NaN : h.m[k]), color: COLS(i), width: 1.6, name: TM.find(t => t[0] === k)[1], axis: i }); } tp.set(s, []); }
+g('ta').onchange = g('tb').onchange = drawT; g('tclr').onclick = () => { hist = []; drawT(); };
+g('tcsv').onclick = () => download('live-log.csv', 'time_s,brightness,radiant_power,cct,x,y\n' + hist.map(h => [h.t.toFixed(2), h.m.Y, h.m.rad, h.m.cct, h.m.x, h.m.y].join(',')).join('\n') + '\n', 'text/csv');
+
+/* ---------- exports ---------- */
+const meta = m => ({ device: 'i1 Pro S/N ' + m.serial, name: m.name, kind: m.kind === 'em' ? 'emission' : 'reflectance', resolution: m.resLabel, exposure_ms: (m.inttime * 1000).toFixed(2), frames: m.nFrames, source_correction: m.corr ? 'yes' : 'no', absolute_factor: m.absK || 'none', time: new Date(m.t).toISOString() });
+g('acts').onclick = async e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return; const m = M.list.find(x => x.id === M.sel); if (!m) return; const a = b.dataset.a;
+  if (a === 'csv') download(m.name + '.csv', I.toCSV(m.spec.wl, m.spec.v, meta(m)), 'text/csv');
+  else if (a === 'sp') download(m.name + '.sp', I.toSP(m.spec.wl, m.spec.v, m.name));
+  else if (a === 'argyll') { const h = m.argyll.hires; download(m.name + '_argyll.csv', '# original ArgyllCMS values\n# 36 bands, 380-730 nm step 10\n' + m.argyll.std36.map((v, i) => (380 + 10 * i) + ',' + v).join('\n') + '\n# high resolution ' + h.lo + '-' + h.hi + ' nm step ' + h.step.toFixed(4) + '\n' + h.v.map((v, i) => (h.lo + i * h.step).toFixed(2) + ',' + v).join('\n') + '\n', 'text/csv'); }
+  else if (a === 'px') download(m.name + '_pixels.csv', 'pixel,nm_from_factory_matrix,counts_per_s\n' + m.avgAbs.map((v, p) => p + ',' + dev.cal.pxnm[p].toFixed(2) + ',' + v).join('\n') + '\n', 'text/csv');
+  else if (a === 're') { try { const r = { kind: m.kind === 'rf' ? 'reflective' : 'emission', avgAbs: Float64Array.from(m.avgAbs), whiteAbs: m.whiteAbs && Float64Array.from(m.whiteAbs) }; const s = gridOf(r); m.spec = { wl: s.wl, v: sig(s.v, 6) }; m.resLabel = preset().label + ' (re-processed)'; save(); render(); status('Re-processed at the current resolution (the current instrument calibration; the source correction and absolute factor are those stored with the measurement only for new readings).', 'ok'); } catch (er) { status(explain(er), 'err'); } }
+};
+g('mexp').onclick = () => download('i1pro-measurements.json', JSON.stringify({ type: 'i1pro-console', version: 1, serial: dev ? dev.cal.serial : null, list: M.list }));
+g('mload').onclick = () => g('mfile').click();
+g('mfile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { const o = JSON.parse(await f.text()); if (o.type !== 'i1pro-console' || !Array.isArray(o.list)) throw 0; for (const m of o.list) { m.id = 'm' + Date.now().toString(36) + (++seq); m.ci = seq - 1; m.name = uniq(m.name); M.list.push(m); } M.sel = M.list[M.list.length - 1].id; save(); render(); status(o.list.length + ' measurement(s) loaded.', 'ok'); } catch (er) { status('Not a valid measurement file.', 'err'); } };
+
+/* ---------- source correction ---------- */
+function refBands() {
+  const k = g('rk').value; if (k !== 'custom') return I.referenceBands(k, num('rT', 2856)); if (!userRef) throw new Error('Load a reference CSV first.');
+  const { wl, v } = userRef; return I.WL36.map(nm => { if (nm <= wl[0]) return v[0]; if (nm >= wl[wl.length - 1]) return v[v.length - 1]; let j = 1; while (wl[j] < nm) j++; return v[j - 1] + (v[j] - v[j - 1]) * (nm - wl[j - 1]) / (wl[j] - wl[j - 1]); });
+}
+g('rk').onchange = () => { const c = g('rk').value === 'custom'; g('rload').hidden = !c; g('rT').parentElement.hidden = c; };
+g('rload').onclick = () => g('rfile').click();
+g('rfile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const rows = (await f.text()).split(/\r?\n/).map(l => l.split(/[,;\t ]+/).map(Number)).filter(r => r.length >= 2 && isFinite(r[0]) && isFinite(r[1])); if (rows.length < 5) { g('rinfo').textContent = 'Could not read that file.'; return; } userRef = { wl: rows.map(r => r[0]), v: rows.map(r => r[1]) }; g('rinfo').textContent = 'Reference loaded: ' + rows.length + ' points.'; };
+g('rcal').onclick = async () => {
+  if (!dev || busy) return; setBusy(true);
+  try { status('Measuring the reference source…'); const ref = refBands(); if (sim) sim.mode = 'emission'; dev.setCorrection(null); const r = await dev.measure(mopts({ reuse: false })), cc = I.computeCorrection(r.s36raw, ref);
+    srcMeta = { kind: g('rk').value, T: num('rT', 2856), date: Date.now(), lo: cc.lo, hi: cc.hi, serial: dev.cal.serial }; dev.setCorrection(cc.c, true, srcMeta); status('Source calibration done, correction ON (reliable ' + cc.lo + '–' + cc.hi + ' nm).', 'ok'); }
+  catch (e) { status(explain(e), 'err'); } setBusy(false);
+};
+g('rclr').onclick = () => { if (dev) dev.setCorrection(null); srcMeta = null; calUi(); };
+g('ron').onchange = () => { if (dev && dev.userCorr) { dev.userCorr.enabled = g('ron').checked; calUi(); status(dev.userCorr.enabled ? 'Source correction ON for new light measurements.' : 'Source correction OFF.', 'ok'); } };
+g('rsave').onclick = () => { if (!dev || !dev.userCorr) return; const p = JSON.stringify({ type: 'i1pro-source-correction', serial: dev.cal.serial, meta: dev.userCorr.meta, c: Array.from(dev.userCorr.c) }); ls.set('i1c-corr-' + dev.cal.serial, p); download('i1pro-correction-' + dev.cal.serial + '.json', p, 'application/json'); };
+g('rload2').onclick = () => g('rpf').click();
+function applyProfile(p) { if (!p || p.type !== 'i1pro-source-correction' || !Array.isArray(p.c) || p.c.length !== 36) throw new Error('bad'); srcMeta = p.meta || {}; dev.setCorrection(p.c, true, srcMeta); }
+g('rpf').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f || !dev) return; try { applyProfile(JSON.parse(await f.text())); calUi(); } catch (er) { g('rinfo').textContent = 'Not a valid correction profile.'; } };
+function loadProfile() { try { const s = ls.get('i1c-corr-' + dev.cal.serial); if (s) { applyProfile(JSON.parse(s)); dev.userCorr.enabled = false; } } catch (e) { } }
+
+/* ---------- absolute level ---------- */
+function absKindUi() {
+  const k = g('ak').value, sh = (id, v) => { g(id).hidden = !v; }; sh('av-f', k === 'lum' || k === 'irr'); sh('ap-f', k === 'laser'); sh('aw-f', k === 'laser'); sh('ah-f', k === 'laser'); sh('aa-f', k === 'laser'); sh('am2-f', k === 'man');
+  g('av-f').firstElementChild.textContent = k === 'irr' ? 'Known value (mW/m², 380–780 nm)' : 'Known value (cd/m²)';
+  g('anote').textContent = k === 'lum' ? 'Point at the source exactly as the luminance meter was. Factor = known cd/m² ÷ this page’s reading.' : k === 'irr' ? 'Factor = known radiant power per area ÷ this page’s reading.' : k === 'laser' ? 'The laser must be fully inside the opening and its power known there. The narrow line is integrated over the window. With the beam area the results are mW/m²/nm; without it they are power at the sensor (mW/nm) and brightness is in lm. Reflections or a partly covered opening make this an estimate.' : 'Multiplies every later light measurement.';
+}
+g('ak').onchange = absKindUi; absKindUi();
+g('acal').onclick = async () => {
+  if (!dev || busy) return; const kind = g('ak').value; setBusy(true); const keep = dev.absCal;
+  try { let k, meta = { date: Date.now(), serial: dev.cal.serial, unit: 'irr' };
+    if (kind === 'man') { k = num('am2', 1); if (!(k > 0)) throw new Error('The factor must be positive.'); meta.kind = 'entered by hand'; }
+    else { status('Measuring the reference…'); if (sim) sim.mode = 'emission'; dev.absCal = null; const r = await dev.measure(mopts({ reuse: false })), f = dev.resampler({ lo: 380, hi: 780, step: 1, kernel: 'factory' }), wl = Array.from(f.wl), v = Array.from(f.apply(r.avgAbs));
+      if (kind === 'lum' || kind === 'irr') { const t = emMetrics(wl, v); k = I.absoluteFactor(kind === 'lum' ? t.Y : t.rad, num('av', 100)); meta.kind = kind === 'lum' ? 'brightness ' + num('av', 100) + ' cd/m²' : 'radiant power ' + num('av', 100) + ' mW/m²'; }
+      else { const rs = dev.resampler({ lo: 380, hi: 730, step: 0.5, kernel: 'argyll', argyllWidth: 3.33 }), vv = Array.from(rs.apply(r.avgAbs), x => Math.max(0, x)), w2 = Array.from(rs.wl); let l0 = num('aw', 0); if (!(l0 > 0)) { let bi = 0; vv.forEach((x, i) => { if (x > vv[bi]) bi = i; }); l0 = w2[bi]; }
+        const hw = num('ah', 15), E = I.bandIntegral(w2, vv, l0 - hw, l0 + hw), P = num('ap', 1), A = num('aa', 0); if (!(E > 0)) throw new Error('No laser light seen around ' + l0.toFixed(1) + ' nm.');
+        if (A > 0) { k = I.absoluteFactor(E, P / (A * 1e-6)); meta.kind = 'laser ' + P + ' mW @ ' + l0.toFixed(1) + ' nm on ' + A + ' mm²'; } else { k = I.absoluteFactor(E, P); meta.unit = 'power'; meta.kind = 'laser ' + P + ' mW @ ' + l0.toFixed(1) + ' nm (no area)'; } } }
+    dev.setAbsCal(k, true, meta); ls.set('i1c-abs-' + dev.cal.serial, JSON.stringify({ k, meta })); status('Absolute level calibrated: factor ' + k.toPrecision(5) + ' is ON.', 'ok'); }
+  catch (e) { dev.absCal = keep; status(explain(e), 'err'); } if (sim) sim.mode = 'emission'; setBusy(false);
+};
+g('aclr').onclick = () => { if (dev) { dev.setAbsCal(null); ls.set('i1c-abs-' + dev.cal.serial, ''); calUi(); } };
+g('aon').onchange = () => { if (dev && dev.absCal) { dev.absCal.enabled = g('aon').checked; calUi(); } };
+function loadAbs() { try { const s = ls.get('i1c-abs-' + dev.cal.serial); if (!s) return; const o = JSON.parse(s); if (o && o.k > 0) dev.setAbsCal(o.k, false, o.meta || {}); } catch (e) { } }
+
+/* ---------- temperature series ---------- */
+let bb = [], bbRes = null;
+function bbUi() {
+  g('btab').querySelector('tbody').innerHTML = bb.map((x, i) => '<tr><td>' + (i + 1) + '</td><td>' + (x.est ? x.est + ' K' : '–') + '</td><td>' + Math.round(x.peak) + '</td><td>' + (bbRes ? Math.round(bbRes.T[i]) + ' K' : '–') + '</td><td>' + (bbRes && bbRes.gauge === 'anchor' && bbRes.anchorIndex === i ? '●' : '') + '</td></tr>').join('');
+  const keep = +g('bas').value || 0; g('bas').innerHTML = bb.map((_, i) => '<option value="' + i + '">' + (i + 1) + '</option>').join(''); g('bas').value = String(Math.min(keep, Math.max(0, bb.length - 1)));
+  g('bclr').disabled = !bb.length; g('bfit').disabled = bb.length < 3; g('buse').disabled = !bbRes;
+}
+g('badd').onclick = async () => { if (!dev || busy) return; setBusy(true); try { status('Measuring…'); if (sim) sim.mode = 'emission'; const r = await dev.measure(mopts({ reuse: false })); bb.push({ est: num('bt', 0) || null, s36: Array.from(r.s36raw), peak: r.peakCounts }); bbRes = null; g('binfo').textContent = bb.length + ' step(s).' + (bb.length < 3 ? ' Add ' + (3 - bb.length) + ' more.' : ''); status('Step ' + bb.length + ' captured.', 'ok'); } catch (e) { status(explain(e), 'err'); } setBusy(false); bbUi(); };
+g('bclr').onclick = () => { bb = []; bbRes = null; g('binfo').textContent = ''; bbUi(); };
+g('bas').onchange = () => { bbRes = null; bbUi(); };
+g('bfit').onclick = () => { try { const at = num('ban', 0), ai = +g('bas').value || 0, res = I.fitBlackbodyTemperatures(bb.map(x => ({ v: x.s36, T0: x.est || undefined })), { lo: num('blo', 430), hi: num('bhi', 710), anchorIndex: at > 0 ? ai : -1, anchorT: at > 0 ? at : 0 }); res.anchorIndex = ai; bbRes = res;
+  g('binfo').innerHTML = 'Fitted: <b>' + res.T.map(T => Math.round(T) + ' K').join(', ') + '</b> (residual ' + (res.resid * 100).toFixed(2) + ' % over ' + res.nBands + ' bands, ' + res.lo + '–' + res.hi + ' nm). ' + (res.gauge === 'anchor' ? 'Anchored at step ' + (ai + 1) + ' = ' + at + ' K.' : '<b>No anchor:</b> steps are exact, absolute values assume the factory colour calibration and a grey emitter (error typically a few %).') + (res.resid > 0.02 ? ' Large residual: not a thermal source, or the light changed between steps.' : ''); bbUi(); } catch (e) { g('binfo').textContent = explain(e); } };
+g('buse').onclick = () => { if (!dev || !bbRes) return; srcMeta = { kind: 'blackbody, ' + bbRes.T.length + '-temperature fit' + (bbRes.gauge === 'anchor' ? ' (anchored)' : ''), date: Date.now(), lo: bbRes.lo, hi: bbRes.hi, serial: dev.cal.serial }; dev.setCorrection(bbRes.corr, true, srcMeta); calUi(); status('Correction from the temperature series is ON.', 'ok'); };
+bbUi();
+
+/* ---------- EEPROM, diagnostics ---------- */
+const sameEE = () => origEE && dev && dev.eeprom.length === origEE.length && dev.eeprom.every((b, i) => b === origEE[i]);
+function eeButtons() { g('eereset').disabled = busy || !dev || !origEE || sameEE(); }
+function eeInfo() { if (dev) { g('eeinfo').textContent = (sameEE() ? 'Using the instrument’s own calibration' : 'Using an IMPORTED calibration') + ' · serial ' + dev.cal.serial + ' · ' + dev.eeprom.length + ' bytes.'; eeButtons(); } else g('eeinfo').textContent = ''; }
+g('eebin').onclick = () => dev && download('i1pro-eeprom-' + dev.cal.serial + '.bin', dev.eeprom, 'application/octet-stream');
+g('eehex').onclick = () => dev && download('i1pro-eeprom-' + dev.cal.serial + '.txt', I.eepromToHexDump(dev.eeprom));
+g('eeload').onclick = () => g('eefile').click();
+g('eefile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f || !dev) return; setBusy(true);
+  try { const buf = new Uint8Array(await f.arrayBuffer()); let u8 = buf; if (!(buf.length >= 8192 && buf.length <= 8300 && !/^[\x20-\x7e\r\n\t]+$/.test(String.fromCharCode(...buf.slice(0, 200))))) u8 = I.parseEEPROMText(new TextDecoder().decode(buf)); dev.loadEEPROM(u8); status('Calibration imported (serial ' + dev.cal.serial + '). Repeat the dark calibration.', 'ok'); eeInfo(); }
+  catch (er) { status('Could not import: ' + explain(er), 'err'); } setBusy(false); };
+g('eereset').onclick = () => { if (dev && origEE) { dev.loadEEPROM(Uint8Array.from(origEE)); status('Back to the instrument’s own calibration. Repeat the dark calibration.', 'ok'); eeInfo(); refresh(); } };
+g('diag').onclick = async () => { if (!dev) return; try { await navigator.clipboard.writeText(dev.diagnostics()); g('diagmsg').textContent = 'Copied. Paste it into your report.'; } catch (e) { g('diagmsg').textContent = 'Could not copy: use Save log.'; } };
+g('diagsave').onclick = () => dev && download('i1pro-diagnostics.txt', dev.diagnostics());
+
+/* ---------- calibration chips ---------- */
+function calUi() {
+  const u = dev && dev.userCorr, on = !!(u && u.enabled), ch = g('rchip'); g('ron').disabled = !u; g('ron').checked = on; g('rclr').disabled = !u; g('rsave').disabled = !u;
+  if (!u) { ch.textContent = 'none · factory calibration only'; ch.className = 'chip'; } else { const m = u.meta || {}; ch.textContent = (on ? 'ON' : 'OFF') + (m.kind ? ' · ' + m.kind + (m.T ? ' ' + m.T + ' K' : '') : ''); ch.className = 'chip ' + (on ? 'ok' : 'warn'); }
+  const cv = g('cvC'), w = Math.max(200, cv.clientWidth || 300), h = 70, d = Math.min(devicePixelRatio || 1, 2); cv.width = w * d; cv.height = h * d; const c = cv.getContext('2d'); c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, w, h);
+  if (u) { const lo = Math.min(...u.c), hi = Math.max(...u.c), s = hi - lo || 1; c.strokeStyle = on ? COLS(0) : '#888'; c.lineWidth = 1.8; c.beginPath(); Array.from(u.c).forEach((y, i) => { const X = 4 + i / 35 * (w - 8), Y = h - 14 - (y - lo) / s * (h - 24); i ? c.lineTo(X, Y) : c.moveTo(X, Y); }); c.stroke(); c.fillStyle = '#888'; c.font = '11px system-ui'; c.fillText('multiplier per band 380 → 730 nm: ' + lo.toFixed(2) + ' … ' + hi.toFixed(2), 4, h - 2); }
+  g('rinfo').textContent = u ? ((u.meta.kind || '') + (u.meta.T ? ' ' + u.meta.T + ' K' : '') + (u.meta.lo ? ' · reliable ' + u.meta.lo + '–' + u.meta.hi + ' nm' : '') + (on ? ' · applied' : ' · not applied')) : '';
+  const a = dev && dev.absCal, aon = !!(a && a.enabled), ac = g('achip'); g('aon').disabled = !a; g('aon').checked = aon; g('aclr').disabled = !a;
+  if (!a) { ac.textContent = 'none · factory scale (assumed mW/m²/nm, unchecked)'; ac.className = 'chip'; } else { ac.textContent = (aon ? 'ON' : 'OFF') + ' · × ' + fmtN(a.k) + (a.meta.kind ? ' · ' + a.meta.kind : ''); ac.className = 'chip ' + (aon ? 'ok' : 'warn'); }
+  g('ainfo').textContent = a ? 'factor ' + a.k.toPrecision(5) + (a.meta.unit === 'power' ? ' · results are power at the sensor (mW/nm)' : ' · results in mW/m²/nm') : '';
+  const dk = dev && dev.dark ? Math.round((Date.now() - dev.darkDate) / 1000) : null; g('darkchip').textContent = dk == null ? 'not done' : 'done · ' + (dk < 90 ? dk + ' s' : Math.round(dk / 60) + ' min') + ' ago'; g('darkchip').className = 'chip ' + (dk == null ? '' : dk > 1800 ? 'warn' : 'ok');
+  g('whitechip').textContent = dev && dev.refl ? 'done' : 'not done'; g('whitechip').className = 'chip ' + (dev && dev.refl ? 'ok' : '');
+}
+setInterval(() => { if (dev) calUi(); }, 15000);
+render(); refresh();
+})();
+</script>
+</body></html>
