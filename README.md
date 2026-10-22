@@ -1,5 +1,7 @@
 # i1pro-webusb
 
+try: https://git67-67.github.io/i1pro-webusb/
+
 A WebUSB driver for the X-Rite / Gretag-Macbeth **i1 Pro** (Rev A–D) spectrometer. It runs in Chrome or Edge, so a web
 page can connect to the instrument, measure a light or a colour sample, and show the spectrum with colour metrics —
 no command-line tools, no local server, no intermediate files.
